@@ -1,0 +1,10 @@
+{
+  "name": "football-confidence-pool-client",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "client": "cd client && npm run dev",
+    "install:all": "cd client && npm install",
+    "build": "cd client && npm run build"
+  }
+}
