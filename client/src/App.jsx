@@ -18,7 +18,12 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('')
   const [draggedGameId, setDraggedGameId] = useState(null)
   const [dragOverGameId, setDragOverGameId] = useState(null)
+  const [activeView, setActiveView] = useState('picks') // 'picks' | 'standings'
   const [selectedWeek, setSelectedWeek] = useState(1)
+  const [allUsers, setAllUsers] = useState([])
+  const [standingsSelectedUserId, setStandingsSelectedUserId] = useState(null)
+  const [userHistory, setUserHistory] = useState([])
+  const [weeklyGrid, setWeeklyGrid] = useState({}) // { user_id: { gameId: pick }}
   const [tiebreaker, setTiebreaker] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('pool_tiebreaker') || '{}')
@@ -36,42 +41,88 @@ export default function App() {
   const week = selectedWeek
   const weekGames = games.filter(g => g.week === week)
   const points = Array.from({ length: weekGames.length }, (_, i) => 16 - i)
-  const helmetMap = {
-    'Arizona Cardinals': 'Cardinals-icon.png',
-    'Atlanta Falcons': 'Falcons-icon.png',
-    'Baltimore Ravens': 'Ravens-icon.png',
-    'Buffalo Bills': 'Bills-icon.png',
-    'Carolina Panthers': 'Panthers-icon.png',
-    'Chicago Bears': 'Bears-icon.png',
-    'Cincinnati Bengals': 'Bengels-icon.png',
-    'Cleveland Browns': 'Browns-icon.png',
-    'Dallas Cowboys': 'Cowboys-icon.png',
-    'Denver Broncos': 'Broncos-icon.png',
-    'Detroit Lions': 'Lions-icon.png',
-    'Green Bay Packers': 'Packers-icon.png',
-    'Houston Texans': 'Texans-icon.png',
-    'Indianapolis Colts': 'Colts-icon.png',
-    'Jacksonville Jaguars': 'Jaguar-icon.png',
-    'Kansas City Chiefs': 'Chiefs-icon.png',
-    'Los Angeles Chargers': 'Chargers-icon.png',
-    'Los Angeles Rams': 'Rams-icon.png',
-    'L.A. Chargers': 'Chargers-icon.png',
-    'L.A. Rams': 'Rams-icon.png',
-    'Las Vegas Raiders': 'Raiders-icon.png',
-    'Miami Dolphins': 'Dolphins-icon.png',
-    'Minnesota Vikings': 'Vikings-icon.png',
-    'New England Patriots': 'Patriots-icon.png',
-    'New Orleans Saints': 'Saints-icon.png',
-    'New York Giants': 'Giants-icon.png',
-    'New York Jets': 'Jets-icon.png',
-    'Philadelphia Eagles': 'Eagles-icon.png',
-    'Pittsburgh Steelers': 'Steelers-icon.png',
-    'San Francisco 49ers': '49ers-icon.png',
-    'Seattle Seahawks': 'Seahawks-icon.png',
-    'Tampa Bay Bucs': 'Buccaneers-icon.png',
-    'Tampa Bay Buccaneers': 'Buccaneers-icon.png',
-    'Tennessee Titans': 'Titans-icon.png',
-    'Washington Commanders': 'Redskins-icon.png'
+  const logoMap = {
+    'Arizona Cardinals': 'https://static.www.nfl.com/league/api/clubs/logos/arizona-cardinals.svg',
+    'Atlanta Falcons': 'https://static.www.nfl.com/league/api/clubs/logos/atlanta-falcons.svg',
+    'Baltimore Ravens': 'https://static.www.nfl.com/league/api/clubs/logos/baltimore-ravens.svg',
+    'Buffalo Bills': 'https://static.www.nfl.com/league/api/clubs/logos/buffalo-bills.svg',
+    'Carolina Panthers': 'https://static.www.nfl.com/league/api/clubs/logos/carolina-panthers.svg',
+    'Chicago Bears': 'https://static.www.nfl.com/league/api/clubs/logos/chicago-bears.svg',
+    'Cincinnati Bengals': 'https://static.www.nfl.com/league/api/clubs/logos/cincinnati-bengals.svg',
+    'Cleveland Browns': 'https://static.www.nfl.com/league/api/clubs/logos/cleveland-browns.svg',
+    'Dallas Cowboys': 'https://static.www.nfl.com/league/api/clubs/logos/dallas-cowboys.svg',
+    'Denver Broncos': 'https://static.www.nfl.com/league/api/clubs/logos/denver-broncos.svg',
+    'Detroit Lions': 'https://static.www.nfl.com/league/api/clubs/logos/detroit-lions.svg',
+    'Green Bay Packers': 'https://static.www.nfl.com/league/api/clubs/logos/green-bay-packers.svg',
+    'Houston Texans': 'https://static.www.nfl.com/league/api/clubs/logos/houston-texans.svg',
+    'Indianapolis Colts': 'https://static.www.nfl.com/league/api/clubs/logos/indianapolis-colts.svg',
+    'Jacksonville Jaguars': 'https://static.www.nfl.com/league/api/clubs/logos/jacksonville-jaguars.svg',
+    'Kansas City Chiefs': 'https://static.www.nfl.com/league/api/clubs/logos/kansas-city-chiefs.svg',
+    'Los Angeles Chargers': 'https://static.www.nfl.com/league/api/clubs/logos/los-angeles-chargers.svg',
+    'Los Angeles Rams': 'https://static.www.nfl.com/league/api/clubs/logos/los-angeles-rams.svg',
+    'L.A. Chargers': 'https://static.www.nfl.com/league/api/clubs/logos/los-angeles-chargers.svg',
+    'L.A. Rams': 'https://static.www.nfl.com/league/api/clubs/logos/los-angeles-rams.svg',
+    'Las Vegas Raiders': 'https://static.www.nfl.com/league/api/clubs/logos/las-vegas-raiders.svg',
+    'Miami Dolphins': 'https://static.www.nfl.com/league/api/clubs/logos/miami-dolphins.svg',
+    'Minnesota Vikings': 'https://static.www.nfl.com/league/api/clubs/logos/minnesota-vikings.svg',
+    'New England Patriots': 'https://static.www.nfl.com/league/api/clubs/logos/new-england-patriots.svg',
+    'New Orleans Saints': 'https://static.www.nfl.com/league/api/clubs/logos/new-orleans-saints.svg',
+    'New York Giants': 'https://static.www.nfl.com/league/api/clubs/logos/new-york-giants.svg',
+    'New York Jets': 'https://static.www.nfl.com/league/api/clubs/logos/new-york-jets.svg',
+    'Philadelphia Eagles': 'https://static.www.nfl.com/league/api/clubs/logos/philadelphia-eagles.svg',
+    'Pittsburgh Steelers': 'https://static.www.nfl.com/league/api/clubs/logos/pittsburgh-steelers.svg',
+    'San Francisco 49ers': 'https://static.www.nfl.com/league/api/clubs/logos/san-francisco-49ers.svg',
+    'Seattle Seahawks': 'https://static.www.nfl.com/league/api/clubs/logos/seattle-seahawks.svg',
+    'Tampa Bay Bucs': 'https://static.www.nfl.com/league/api/clubs/logos/tampa-bay-buccaneers.svg',
+    'Tampa Bay Buccaneers': 'https://static.www.nfl.com/league/api/clubs/logos/tampa-bay-buccaneers.svg',
+    'Tennessee Titans': 'https://static.www.nfl.com/league/api/clubs/logos/tennessee-titans.svg',
+    'Washington Commanders': 'https://static.www.nfl.com/league/api/clubs/logos/washington-commanders.svg'
+  }
+
+  const abbrevMap = {
+    'Arizona Cardinals': 'ARZ',
+    'Atlanta Falcons': 'ATL',
+    'Baltimore Ravens': 'BAL',
+    'Buffalo Bills': 'BUF',
+    'Carolina Panthers': 'CAR',
+    'Chicago Bears': 'CHI',
+    'Cincinnati Bengals': 'CIN',
+    'Cleveland Browns': 'CLE',
+    'Dallas Cowboys': 'DAL',
+    'Denver Broncos': 'DEN',
+    'Detroit Lions': 'DET',
+    'Green Bay Packers': 'GBP',
+    'Houston Texans': 'HOU',
+    'Indianapolis Colts': 'IND',
+    'Jacksonville Jaguars': 'JAX',
+    'Kansas City Chiefs': 'KC',
+    'Los Angeles Chargers': 'LAC',
+    'Los Angeles Rams': 'LAR',
+    'L.A. Chargers': 'LAC',
+    'L.A. Rams': 'LAR',
+    'Las Vegas Raiders': 'LV',
+    'Miami Dolphins': 'MIA',
+    'Minnesota Vikings': 'MIN',
+    'New England Patriots': 'NE',
+    'New Orleans Saints': 'NO',
+    'New York Giants': 'NYG',
+    'New York Jets': 'NYJ',
+    'Philadelphia Eagles': 'PHI',
+    'Pittsburgh Steelers': 'PIT',
+    'San Francisco 49ers': 'SF',
+    'Seattle Seahawks': 'SEA',
+    'Tampa Bay Bucs': 'TB',
+    'Tampa Bay Buccaneers': 'TB',
+    'Tennessee Titans': 'TEN',
+    'Washington Commanders': 'WSH'
+  }
+
+  const getTeamAbbrev = (name) => {
+    if (!name) return ''
+    if (abbrevMap[name]) return String(abbrevMap[name])
+    // fallback: build a 3-letter abbrev from words
+    const raw = name.split(' ').filter(Boolean).slice(-1)[0] || name
+    return raw.slice(0,3).toUpperCase()
   }
 
   const getAbbrev = (name) => {
@@ -85,18 +136,133 @@ export default function App() {
       .toUpperCase()
   }
 
-  const getHelmetSrc = (name) => {
-    const file = helmetMap[name]
-    return file ? `/helmets/${file}` : null
+  const getLogoSrc = (name) => {
+    const file = logoMap[name]
+    if (!file) return null
+    // if the map value is already an absolute URL, return it unchanged
+    if (/^https?:\/\//i.test(file)) return file
+    // otherwise assume it's a local filename placed under /logos/
+    return `/logos/${file}`
   }
 
   useEffect(() => {
-    // client-only: load mock games
-    setGames(mockGames)
-    // compute standings from local picks
-    const s = computeStandingsFromLocal()
-    setStandings(s)
+    // try to load games from server; if unavailable, use mockGames and push them to server
+    async function initGames() {
+      try {
+        const res = await fetch('http://localhost:3000/api/games');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length) {
+            setGames(data);
+            try {
+              const sres = await fetch('http://localhost:3000/api/standings');
+              if (sres.ok) {
+                const sdata = await sres.json();
+                setStandings(sdata);
+                return;
+              }
+            } catch (e) {}
+            setStandings(computeStandingsFromLocal());
+            return;
+          }
+        }
+      } catch (e) {
+        // server unreachable
+      }
+      // fallback: client mock games
+      setGames(mockGames)
+      setStandings(computeStandingsFromLocal())
+      // try to populate server with mock games (best-effort)
+      try {
+        await fetch('http://localhost:3000/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mockGames) })
+      } catch (e) {}
+    }
+    initGames()
   }, [])
+
+  // load users and standings (server-first)
+  useEffect(() => {
+    async function loadUsersAndStandings() {
+      let users = []
+      try {
+        const res = await fetch('http://localhost:3000/api/users')
+        if (res.ok) users = await res.json()
+      } catch (e) {
+        // fallback to local users
+        users = JSON.parse(localStorage.getItem('pool_users') || '[]')
+      }
+      setAllUsers(users)
+      if (!standingsSelectedUserId && users.length) setStandingsSelectedUserId(users[0].id)
+
+      try {
+        const sres = await fetch('http://localhost:3000/api/standings')
+        if (sres.ok) {
+          const s = await sres.json()
+          setStandings(s)
+          return
+        }
+      } catch (e) {}
+      setStandings(computeStandingsFromLocal())
+    }
+    loadUsersAndStandings()
+  }, [])
+
+  useEffect(() => {
+    if (!standingsSelectedUserId) return
+    async function loadHistory() {
+      try {
+        const res = await fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`)
+        if (res.ok) {
+          const data = await res.json()
+          setUserHistory(data)
+          return
+        }
+      } catch (e) {
+        // server not available
+      }
+      // fallback: build from localStorage
+      const picks = JSON.parse(localStorage.getItem(`picks_${standingsSelectedUserId}`) || '[]')
+      const local = picks.map(p => {
+        const g = mockGames.find(m => m.id === p.game_id) || null
+        const winner = g && typeof g.home_score === 'number' && typeof g.away_score === 'number'
+          ? (g.home_score > g.away_score ? g.home : (g.away_score > g.home_score ? g.away : null))
+          : null
+        const correct = winner ? (p.picked_team === winner) : null
+        const pointsEarned = correct ? (p.confidence == null ? 1 : Number(p.confidence)) : 0
+        return { ...p, game: g ? { id: g.id, week: g.week, home: g.home, away: g.away, kickoff: g.kickoff, home_score: g.home_score, away_score: g.away_score } : null, winner, correct, pointsEarned }
+      })
+      setUserHistory(local)
+    }
+    loadHistory()
+  }, [standingsSelectedUserId])
+
+  useEffect(() => {
+    // when switching to weekly view, fetch picks for all users for the selected week
+    async function loadWeekly() {
+      if (activeView !== 'weekly') return
+      const users = allUsers || []
+      const map = {}
+      await Promise.all(users.map(async u => {
+        try {
+          const res = await fetch(`http://localhost:3000/api/picks?user_id=${u.id}`)
+          if (res.ok) {
+            const picks = await res.json()
+            const byGame = {}
+            for (const p of picks) byGame[String(p.game_id)] = p
+            map[u.id] = byGame
+            return
+          }
+        } catch (e) {}
+        // fallback: localStorage
+        const picks = JSON.parse(localStorage.getItem(`picks_${u.id}`) || '[]')
+        const byGame = {}
+        for (const p of picks) byGame[String(p.game_id)] = p
+        map[u.id] = byGame
+      }))
+      setWeeklyGrid(map)
+    }
+    loadWeekly()
+  }, [activeView, allUsers, selectedWeek])
 
   useEffect(() => {
     if (!weeks.length) return
@@ -107,14 +273,26 @@ export default function App() {
     // fetch existing picks for logged-in user (if token)
     async function loadPicks() {
       try {
-        if (!token) return;
-        const res = await fetch('/api/picks_user', { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) return;
-        const data = await res.json();
-        // data expected: [{ game_id, picked_team, confidence }]
-        const map = {};
-        data.forEach(p => { map[p.game_id] = { picked_team: p.picked_team, confidence: p.confidence } });
-        setLocalPicks(map);
+        if (!user) return;
+        // try server first
+        try {
+          const res = await fetch(`http://localhost:3000/api/picks?user_id=${user.id}`);
+          if (res.ok) {
+            const data = await res.json();
+            const map = {};
+            data.forEach(p => { map[p.game_id] = { picked_team: p.picked_team, confidence: p.confidence } });
+            setLocalPicks(map);
+            return;
+          }
+        } catch (e) {
+          // server not available, fall through to localStorage
+        }
+        // fallback: load from localStorage
+        const key = `picks_${user.id}`
+        const picks = JSON.parse(localStorage.getItem(key) || '[]')
+        const map = {}
+        picks.forEach(p => { map[p.game_id] = { picked_team: p.picked_team, confidence: p.confidence } })
+        setLocalPicks(map)
       } catch (e) {}
     }
     loadPicks();
@@ -134,26 +312,53 @@ export default function App() {
     localStorage.setItem('pool_tiebreaker', JSON.stringify(tiebreaker))
   }, [tiebreaker])
 
-  // client-only simple register/login (no server)
-  const register = () => {
-    const users = JSON.parse(localStorage.getItem('pool_users') || '[]')
+  // register/login - prefer server, fallback to localStorage
+  const register = async () => {
     if (!authName) return alert('enter name')
+    try {
+      const res = await fetch('http://localhost:3000/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: authName }) })
+      if (res.ok) {
+        const u = await res.json()
+        // keep a local users list for client convenience
+        const users = JSON.parse(localStorage.getItem('pool_users') || '[]')
+        users.push({ id: u.id, name: u.username })
+        localStorage.setItem('pool_users', JSON.stringify(users))
+        setUser({ id: u.id, name: u.username })
+        setAuthName('')
+        setAuthPassword('')
+        return
+      }
+    } catch (e) {
+      // server not available, fall back to local
+    }
+    const users = JSON.parse(localStorage.getItem('pool_users') || '[]')
     const id = (users[users.length-1]?.id || 0) + 1
-    const user = { id, name: authName }
-    users.push(user)
+    const nu = { id, name: authName }
+    users.push(nu)
     localStorage.setItem('pool_users', JSON.stringify(users))
-    setUser(user)
-    setToken('local_'+id)
+    setUser(nu)
     setAuthName('')
     setAuthPassword('')
   }
 
-  const login = () => {
+  const login = async () => {
+    if (!authName) return alert('enter name')
+    try {
+      const res = await fetch(`http://localhost:3000/api/users?username=${encodeURIComponent(authName)}`)
+      if (res.ok) {
+        const u = await res.json()
+        setUser({ id: u.id, name: u.username })
+        setAuthName('')
+        setAuthPassword('')
+        return
+      }
+    } catch (e) {
+      // server unavailable - try local
+    }
     const users = JSON.parse(localStorage.getItem('pool_users') || '[]')
     const found = users.find(u => u.name === authName)
     if (!found) return alert('user not found')
     setUser(found)
-    setToken('local_'+found.id)
     setAuthName('')
     setAuthPassword('')
   }
@@ -173,8 +378,26 @@ export default function App() {
     setUser(user)
   }
   const submitPickToServer = async (gameId, pick) => {
-    // client-only: persist pick to localStorage
     if (!user) return { ok: false, error: 'login required' }
+    // try server
+    try {
+      const body = { user_id: user.id, game_id: gameId, picked_team: pick.picked_team, confidence: pick.confidence }
+      const res = await fetch('http://localhost:3000/api/picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (res.ok) {
+        const saved = await res.json()
+        // reflect server pick in local state
+        setLocalPicks(prev => ({ ...prev, [gameId]: { picked_team: saved.picked_team, confidence: saved.confidence } }))
+        // refresh standings
+        fetch('http://localhost:3000/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
+        // if selected user's history or current user, refresh history
+        if (standingsSelectedUserId && String(standingsSelectedUserId) === String(user.id)) {
+          fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`).then(r => r.json()).then(setUserHistory).catch(() => {})
+        }
+        return { ok: true }
+      }
+    } catch (e) {
+      // server not available, fall back to localStorage
+    }
     const key = `picks_${user.id}`
     const picks = JSON.parse(localStorage.getItem(key) || '[]')
     // remove same confidence from other picks
@@ -185,6 +408,23 @@ export default function App() {
     if (existingIndex >= 0) picks[existingIndex] = { game_id: gameId, picked_team: pick.picked_team, confidence: pick.confidence }
     else picks.push({ game_id: gameId, picked_team: pick.picked_team, confidence: pick.confidence })
     localStorage.setItem(key, JSON.stringify(picks))
+    setLocalPicks(prev => ({ ...prev, [gameId]: { picked_team: pick.picked_team, confidence: pick.confidence } }))
+    // local fallback: refresh local standings and history if relevant
+    setStandings(computeStandingsFromLocal())
+    if (standingsSelectedUserId && String(standingsSelectedUserId) === String(user.id)) {
+      const key = `picks_${standingsSelectedUserId}`
+      const picks = JSON.parse(localStorage.getItem(key) || '[]')
+      const local = picks.map(p => {
+        const g = mockGames.find(m => m.id === p.game_id) || null
+        const winner = g && typeof g.home_score === 'number' && typeof g.away_score === 'number'
+          ? (g.home_score > g.away_score ? g.home : (g.away_score > g.home_score ? g.away : null))
+          : null
+        const correct = winner ? (p.picked_team === winner) : null
+        const pointsEarned = correct ? (p.confidence == null ? 1 : Number(p.confidence)) : 0
+        return { ...p, game: g ? { id: g.id, week: g.week, home: g.home, away: g.away, kickoff: g.kickoff, home_score: g.home_score, away_score: g.away_score } : null, winner, correct, pointsEarned }
+      })
+      setUserHistory(local)
+    }
     return { ok: true }
   }
 
@@ -207,8 +447,30 @@ export default function App() {
     return rows.sort((a,b) => b.score - a.score)
   }
 
+  const computeUserStats = (userId) => {
+    const picks = JSON.parse(localStorage.getItem(`picks_${userId}`) || '[]')
+    let wins = 0
+    let losses = 0
+    let points = 0
+    let possible = 0
+    for (const p of picks) {
+      const g = games.find(m => m.id === p.game_id)
+      const conf = p.confidence == null ? 1 : Number(p.confidence)
+      if (g && typeof g.home_score === 'number' && typeof g.away_score === 'number') {
+        const winner = g.home_score > g.away_score ? g.home : (g.away_score > g.home_score ? g.away : null)
+        if (winner && p.picked_team === winner) { wins++; points += conf }
+        else if (winner && p.picked_team) { losses++; }
+      } else {
+        // game pending
+        possible += conf
+      }
+    }
+    return { wins, losses, possible, points }
+  }
+
   const setPickWithConfidence = (gameId, team, confidence) => {
     const parsed = confidence ? parseInt(confidence, 10) : null
+    // update local state and persist immediately
     setLocalPicks(prev => {
       const next = { ...prev }
       if (parsed) {
@@ -220,6 +482,11 @@ export default function App() {
       }
       next[gameId] = { ...(next[gameId] || {}), picked_team: team, confidence: parsed }
       return next
+    })
+    const pickToSave = { picked_team: team, confidence: parsed }
+    submitPickToServer(gameId, pickToSave).then(() => {
+      // refresh standings from server if available
+      fetch('http://localhost:3000/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
     })
   }
 
@@ -301,13 +568,41 @@ export default function App() {
   }
 
   const renderTeamIcon = (team, selected) => {
-    const src = getHelmetSrc(team)
+    const mapped = logoMap[team]
+    const local = getLogoSrc(team)
+    const teamCdnBase = 'https://static.www.nfl.com/h_40,w_40,q_auto,f_auto,dpr_2.0/league/api/clubs/logos'
+    const cdnCodeOverrides = {
+      'Washington Commanders': 'WAS',
+      'Green Bay Packers': 'GB',
+      'Arizona Cardinals': 'ARI'
+    }
+    const code = (cdnCodeOverrides[team] || abbrevMap[team] || getTeamAbbrev(team) || getAbbrev(team)).toUpperCase()
+    const slug = String(team).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    const lastWord = String(team).split(' ').filter(Boolean).slice(-1)[0]
+    const localFallback = lastWord ? `/logos/${lastWord}-icon.svg` : null
+
+    const candidates = []
+    if (mapped) candidates.push(mapped)
+    candidates.push(`${teamCdnBase}/${code}`)
+    candidates.push(`https://static.www.nfl.com/league/api/clubs/logos/${slug}.svg`)
+    if (local) candidates.push(local)
+    if (localFallback) candidates.push(localFallback)
+
+    const dataList = JSON.stringify(candidates)
     return (
-      <span
-        className={`team-icon ${selected ? 'selected' : ''}`}
-        title={team}
-      >
-        {src ? <img src={src} alt={`${team} helmet`} /> : <span className="team-tag-text">{getAbbrev(team)}</span>}
+      <span className={`team-icon ${selected ? 'selected' : ''}`} title={team}>
+        <img src={candidates[0]} alt={`${team} logo`} data-srcs={dataList} onError={(e) => {
+          try {
+            const list = JSON.parse(e.target.dataset.srcs || '[]')
+            if (list.length > 1) {
+              list.shift()
+              e.target.dataset.srcs = JSON.stringify(list)
+              e.target.src = list[0]
+            } else {
+              e.target.remove()
+            }
+          } catch (err) { e.target.remove() }
+        }} />
       </span>
     )
   }
@@ -319,7 +614,7 @@ export default function App() {
     if (res.ok) alert('pick saved')
     else alert(res.error || 'save failed')
     // refresh standings
-    fetch('/api/standings').then(r => r.json()).then(setStandings)
+    setStandings(computeStandingsFromLocal())
   }
 
   const saveAll = async () => {
@@ -336,7 +631,18 @@ export default function App() {
       if (!res.ok) alert(`Error saving ${id}: ${res.error}`)
     }
     alert('all saved')
-    fetch('/api/standings').then(r => r.json()).then(setStandings)
+    // recompute standings from local picks + mock games
+    setStandings(computeStandingsFromLocal())
+    // refresh history for selected user
+    if (standingsSelectedUserId) {
+      try {
+        const res = await fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`)
+        if (res.ok) setUserHistory(await res.json())
+        else setUserHistory([])
+      } catch (e) {
+        // fallback handled elsewhere
+      }
+    }
   }
 
   return (
@@ -351,6 +657,11 @@ export default function App() {
                 <option key={`week-${value}`} value={value}>Week {value}</option>
               ))}
             </select>
+          </div>
+          <div className="view-tabs">
+            <button className={`button ${activeView === 'picks' ? 'is-active' : ''}`} onClick={() => setActiveView('picks')}>Picks</button>
+            <button className={`button ${activeView === 'standings' ? 'is-active' : ''}`} onClick={() => setActiveView('standings')}>Standings</button>
+            <button className={`button ${activeView === 'weekly' ? 'is-active' : ''}`} onClick={() => setActiveView('weekly')}>Weekly</button>
           </div>
         </header>
 
@@ -384,127 +695,344 @@ export default function App() {
         </section>
 
         <section className="table-wrap">
-          <div className="table-actions">
-            <button className="button" onClick={saveAll}>Save All Picks</button>
-          </div>
+          {activeView === 'picks' ? (
+            <>
+              <div className="table-actions">
+                <button className="button" onClick={saveAll}>Save All Picks</button>
+              </div>
 
-          <div className="picksheet-grid">
-            <ul
-              className="picksheet-list"
-              ref={listRef}
-              onDragOver={handleListDragOver}
-              onDragLeave={() => setDragOverGameId(null)}
-            >
-              <li className="picksheet-header">
-                <span>Points</span>
-                <span>Away Team</span>
-                <span>Home Team</span>
-                <span>Drag</span>
-              </li>
-              {weekGames.map((g, index) => {
-                const pick = localPicks[g.id] || {}
-                const rowPoints = points[index] || ''
-                const rowClassName = [
-                  'picksheet-item',
-                  draggedGameId === g.id ? 'is-dragging' : '',
-                  dragOverGameId === g.id ? 'is-over' : ''
-                ].filter(Boolean).join(' ')
-                return (
-                  <li
-                    key={g.id}
-                    data-game-id={g.id}
-                    className={rowClassName}
-                    onDrop={(e) => handleRowDrop(e, g.id)}
-                    onDragEnd={handleRowDragEnd}
-                  >
-                    <div className="points-stack">{rowPoints}</div>
-                    <div
-                      className="team-box away-box"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setPickWithConfidence(g.id, g.away, rowPoints)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          setPickWithConfidence(g.id, g.away, rowPoints)
-                        }
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name={`pick-${g.id}`}
-                        checked={pick.picked_team === g.away}
-                        onChange={() => setPickWithConfidence(g.id, g.away, rowPoints)}
-                      />
-                      {renderTeamIcon(g.away, pick.picked_team === g.away)}
-                      <div className="team-text">
-                        <div className="team-name">
-                          {g.away} <span className="team-record">(0-0)</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      className="team-box home-box"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setPickWithConfidence(g.id, g.home, rowPoints)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          setPickWithConfidence(g.id, g.home, rowPoints)
-                        }
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name={`pick-${g.id}`}
-                        checked={pick.picked_team === g.home}
-                        onChange={() => setPickWithConfidence(g.id, g.home, rowPoints)}
-                      />
-                      {renderTeamIcon(g.home, pick.picked_team === g.home)}
-                      <div className="team-text">
-                        <div className="team-name">
-                          {g.home} <span className="team-record">(0-0)</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="drag-slot">
-                      <button
-                        type="button"
-                        className="drag-handle"
-                        draggable
-                        onDragStart={(e) => handleRowDragStart(e, g.id)}
-                        onDragEnd={handleRowDragEnd}
-                        aria-label="Drag to reorder"
-                      >
-                        ⋮⋮
-                      </button>
-                      <div className="game-time">{g.kickoff || 'TBD'}</div>
-                    </div>
+              <div className="picksheet-grid">
+                <ul
+                  className="picksheet-list"
+                  ref={listRef}
+                  onDragOver={handleListDragOver}
+                  onDragLeave={() => setDragOverGameId(null)}
+                >
+                  <li className="picksheet-header">
+                    <span>Points</span>
+                    <span>Away Team</span>
+                    <span>Home Team</span>
+                    <span>Drag</span>
                   </li>
-                )
-              })}
-            </ul>
-          </div>
-          {weekGames.length > 0 && (
-            <div className="tiebreaker">
-              <span className="tiebreaker-label">
-                Tiebreak (combined points in {weekGames[weekGames.length - 1].away}/{weekGames[weekGames.length - 1].home} game*):
-              </span>
-              <input
-                className="tiebreaker-input"
-                type="number"
-                min="0"
-                inputMode="numeric"
-                value={tiebreaker[week] ?? ''}
-                onChange={(e) => updateTiebreaker(e.target.value)}
-              />
-              <span className="tiebreaker-time">{weekGames[weekGames.length - 1].kickoff || 'TBD'}</span>
-            </div>
+                  {weekGames.map((g, index) => {
+                    const pick = localPicks[g.id] || {}
+                    const rowPoints = points[index] || ''
+                    const rowClassName = [
+                      'picksheet-item',
+                      draggedGameId === g.id ? 'is-dragging' : '',
+                      dragOverGameId === g.id ? 'is-over' : ''
+                    ].filter(Boolean).join(' ')
+                    return (
+                      <li
+                        key={g.id}
+                        data-game-id={g.id}
+                        className={rowClassName}
+                        onDrop={(e) => handleRowDrop(e, g.id)}
+                        onDragEnd={handleRowDragEnd}
+                      >
+                        <div className="points-stack">{rowPoints}</div>
+                        <div
+                          className="team-box away-box"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setPickWithConfidence(g.id, g.away, rowPoints)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setPickWithConfidence(g.id, g.away, rowPoints)
+                            }
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name={`pick-${g.id}`}
+                            checked={pick.picked_team === g.away}
+                            onChange={() => setPickWithConfidence(g.id, g.away, rowPoints)}
+                          />
+                          {renderTeamIcon(g.away, pick.picked_team === g.away)}
+                          <div className="team-text">
+                            <div className="team-name">
+                              {g.away} <span className="team-record">(0-0)</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          className="team-box home-box"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setPickWithConfidence(g.id, g.home, rowPoints)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setPickWithConfidence(g.id, g.home, rowPoints)
+                            }
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name={`pick-${g.id}`}
+                            checked={pick.picked_team === g.home}
+                            onChange={() => setPickWithConfidence(g.id, g.home, rowPoints)}
+                          />
+                          {renderTeamIcon(g.home, pick.picked_team === g.home)}
+                          <div className="team-text">
+                            <div className="team-name">
+                              {g.home} <span className="team-record">(0-0)</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="drag-slot">
+                          <button
+                            type="button"
+                            className="drag-handle"
+                            draggable
+                            onDragStart={(e) => handleRowDragStart(e, g.id)}
+                            onDragEnd={handleRowDragEnd}
+                            aria-label="Drag to reorder"
+                          >
+                            ⋮⋮
+                          </button>
+                          <div className="game-time">{g.kickoff || 'TBD'}</div>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+              {weekGames.length > 0 && (
+                <div className="tiebreaker">
+                  <span className="tiebreaker-label">
+                    Tiebreak (combined points in {weekGames[weekGames.length - 1].away}/{weekGames[weekGames.length - 1].home} game*):
+                  </span>
+                  <input
+                    className="tiebreaker-input"
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={tiebreaker[week] ?? ''}
+                    onChange={(e) => updateTiebreaker(e.target.value)}
+                  />
+                  <span className="tiebreaker-time">{weekGames[weekGames.length - 1].kickoff || 'TBD'}</span>
+                </div>
+              )}
+              <div className="section-footer">
+                <button className="button" onClick={saveAll}>Save All Picks</button>
+              </div>
+            </>
+          ) : (
+            // Standings view
+            <>
+              <div className="standings-header">
+                <div className="user-tabs">
+                  {allUsers.map(u => (
+                    <button
+                      key={`u-${u.id}`}
+                      className={`button ${standingsSelectedUserId === u.id ? 'is-active' : ''}`}
+                      onClick={() => setStandingsSelectedUserId(u.id)}
+                    >
+                      {u.username || u.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="standings-actions">
+                  <button className="button" onClick={() => {
+                    // refresh standings from server if available
+                    fetch('http://localhost:3000/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
+                  }}>Refresh</button>
+                </div>
+              </div>
+              <div className="standings-body">
+                {activeView === 'weekly' ? (
+                  <div className="weekly-view">
+                    <div className="weekly-grid">
+                      <div className="weekly-scroll">
+                        <div className="weekly-row weekly-header">
+                        <div className="player-cell header">Games</div>
+                        {weekGames.map(g => (
+                          <div key={`hg-${g.id}`} className="weekly-cell header" title={`${g.away} @ ${g.home}`}>
+                            <div className="game-stack">
+                              <div className="game-away">{getTeamAbbrev(g.away)}</div>
+                              <div className="game-sep">@</div>
+                              <div className="game-home">{getTeamAbbrev(g.home)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {allUsers.map(u => {
+                        const picksMap = weeklyGrid[u.id] || {}
+                        const r = standings.find(s => String(s.user_id) === String(u.id)) || { points: 0 }
+                        return (
+                          <div key={`wr-${u.id}`} className="weekly-row">
+                              <div className="player-cell">
+                                <div className="player-initial">{(u.username||u.name||'').charAt(0) || '?'}</div>
+                                <div className="player-meta">
+                                  <div className="player-name">{u.username||u.name}</div>
+                                  <div className="player-points">{r.points ?? r.score ?? 0} pts</div>
+                                </div>
+                              </div>
+                            {weekGames.map(g => {
+                              const p = picksMap[String(g.id)] || null
+                              let status = 'pending'
+                              if (p && g && typeof g.home_score === 'number' && typeof g.away_score === 'number') {
+                                const winner = g.home_score > g.away_score ? g.home : (g.away_score > g.home_score ? g.away : null)
+                                if (winner && p.picked_team === winner) status = 'correct'
+                                else status = 'wrong'
+                              }
+                              return (
+                                <div key={`wc-${u.id}-${g.id}`} className={`weekly-cell ${status}`}>
+                                  <div className="cell-team">
+                                    {p ? (
+                                              <>
+                                                <div className="helmet-wrap">{renderTeamIcon(p.picked_team, false)}</div>
+                                                <div className="team-abbrev">{getTeamAbbrev(p.picked_team)}</div>
+                                              </>
+                                            ) : ''}
+                                      </div>
+                                      <div className={`cell-conf ${p && p.confidence != null && Number(p.confidence) >= 10 ? 'double' : ''}`}>{p && p.confidence != null ? p.confidence : ''}</div>
+                                    </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <table className="standings-table">
+                    <thead>
+                      <tr>
+                        <th style={{width:60}}>Rank</th>
+                        <th>Entry Name</th>
+                        <th style={{width:60, textAlign:'right'}}>W</th>
+                        <th style={{width:60, textAlign:'right'}}>L</th>
+                        <th style={{width:120, textAlign:'right'}}>Possible Pts</th>
+                        <th style={{width:120, textAlign:'right'}}>Points</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {standings.map((row, idx) => {
+                        const isSelected = String(row.user_id) === String(standingsSelectedUserId)
+                        const computed = computeUserStats(row.user_id)
+                        const stats = {
+                          wins: row.wins ?? computed.wins,
+                          losses: row.losses ?? computed.losses,
+                          possible: row.possible ?? computed.possible,
+                          points: row.points ?? row.score ?? computed.points
+                        }
+                        return (
+                          <tr key={`s-${row.user_id}`} className={isSelected ? 'is-selected' : ''}>
+                            <td className="col-rank">{idx + 1}</td>
+                            <td className="col-name">{row.name}</td>
+                            <td style={{textAlign:'right'}}>{stats.wins}</td>
+                            <td style={{textAlign:'right'}}>{stats.losses}</td>
+                            <td style={{textAlign:'right'}}>{stats.possible}</td>
+                            <td style={{textAlign:'right'}} className="col-points">{stats.points}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+                {standingsSelectedUserId && activeView !== 'weekly' && (
+                  <div className="selected-user-panel">
+                    {(() => {
+                      const r = standings.find(s => String(s.user_id) === String(standingsSelectedUserId))
+                      if (!r) return <div className="muted">No standings for selected user</div>
+                      return (
+                        <div>
+                          <h3>{r.name}</h3>
+                          <p>Score: <strong>{r.score}</strong></p>
+                          <p>Rank: <strong>{standings.findIndex(s => String(s.user_id) === String(standingsSelectedUserId)) + 1}</strong></p>
+                          <h4>Pick history</h4>
+                                    <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:8}}>
+                                      <button className="button" onClick={() => {
+                                        // export CSV for this user
+                                        const rows = userHistory || []
+                                        if (!rows.length) return alert('no picks to export')
+                                        const cols = ['game_id','week','away','home','picked_team','confidence','correct','pointsEarned']
+                                        const csv = [cols.join(',')].concat(rows.map(r => {
+                                          const g = r.game || {}
+                                          return [r.game_id, g.week ?? '', (g.away||'').replace(/,/g,' '), (g.home||'').replace(/,/g,' '), (r.picked_team||'').replace(/,/g,' '), r.confidence ?? '', r.correct == null ? '' : r.correct ? '1' : '0', r.pointsEarned || 0].join(',')
+                                        })).join('\n')
+                                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                                        const url = URL.createObjectURL(blob)
+                                        const a = document.createElement('a')
+                                        a.href = url
+                                        a.download = `user_${standingsSelectedUserId}_history.csv`
+                                        document.body.appendChild(a)
+                                        a.click()
+                                        a.remove()
+                                        URL.revokeObjectURL(url)
+                                      }}>Export CSV</button>
+                                    </div>
+                                    {userHistory.length === 0 ? (
+                                      <div className="muted">No picks yet for this user</div>
+                                    ) : (
+                                      <ul className="history-list">
+                                        {userHistory.map(h => (
+                                          <li key={`h-${h.id}`} className="history-item">
+                                            <div className="history-title">Week {h.game?.week ?? 'N/A'} — {h.game?.away} @ {h.game?.home}</div>
+                                            <div className="history-meta">
+                                              <span>Pick: <strong>{h.picked_team}</strong></span>
+                                              <span> | Points: <strong>{h.pointsEarned}</strong></span>
+                                              <span> | Result: {h.game?.home_score != null && h.game?.away_score != null ? `${h.game.home_score}-${h.game.away_score}` : 'TBD'}</span>
+                                              <span className={"badge " + (h.correct ? 'badge-correct' : (h.correct === false ? 'badge-wrong' : ''))}>
+                                                {h.correct === true ? 'Correct' : (h.correct === false ? 'Wrong' : 'Pending')}
+                                              </span>
+                                              <span style={{marginLeft:8}}>
+                                                <button className="button button--small" onClick={async () => {
+                                                  // delete pick
+                                                  if (!confirm('Delete this pick?')) return
+                                                  try {
+                                                    const res = await fetch(`http://localhost:3000/api/picks?id=${h.id}`, { method: 'DELETE' })
+                                                    if (res.ok) {
+                                                      // refresh history & standings
+                                                      const r2 = await fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`)
+                                                      if (r2.ok) setUserHistory(await r2.json())
+                                                      fetch('http://localhost:3000/api/standings').then(r=>r.json()).then(setStandings).catch(()=>setStandings(computeStandingsFromLocal()))
+                                                      return
+                                                    }
+                                                  } catch (e) {
+                                                    // fallback: remove from localStorage
+                                                  }
+                                                  // local fallback
+                                                  const key = `picks_${standingsSelectedUserId}`
+                                                  const picks = JSON.parse(localStorage.getItem(key) || '[]')
+                                                  const next = picks.filter(p => p.game_id !== h.game_id)
+                                                  localStorage.setItem(key, JSON.stringify(next))
+                                                  setUserHistory(next.map(p => ({ ...p })))
+                                                }}>Delete</button>
+                                                <button className="button button--small" style={{marginLeft:6}} onClick={async () => {
+                                                  const newConf = prompt('New confidence (number or blank to clear):', h.confidence == null ? '' : String(h.confidence))
+                                                  if (newConf === null) return
+                                                  const confVal = newConf === '' ? null : Number(newConf)
+                                                  const newPick = { picked_team: h.picked_team, confidence: confVal }
+                                                  // update via submitPickToServer
+                                                  const res = await submitPickToServer(h.game_id, newPick)
+                                                  if (res.ok) {
+                                                    // refresh history
+                                                    try {
+                                                      const r2 = await fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`)
+                                                      if (r2.ok) setUserHistory(await r2.json())
+                                                      fetch('http://localhost:3000/api/standings').then(r=>r.json()).then(setStandings).catch(()=>setStandings(computeStandingsFromLocal()))
+                                                    } catch (e) {}
+                                                  } else alert('update failed')
+                                                }}>Edit</button>
+                                              </span>
+                                            </div>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
+              </div>
+            </>
           )}
-          <div className="section-footer">
-            <button className="button" onClick={saveAll}>Save All Picks</button>
-          </div>
         </section>
       </div>
     </div>

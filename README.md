@@ -87,3 +87,20 @@ npm run dev
 ```
 
 Open the Vite URL shown in the terminal (usually http://localhost:5173) and use the app fully in the browser.
+
+If you want to persist picks to a small local database, there's a minimal server scaffold at `server/`.
+Start it from the project root:
+
+```bash
+cd server
+npm install
+npm start
+```
+
+This starts a tiny Express API on port 3000 exposing:
+- `GET /api/health` - basic health check
+- `POST /api/users` - create a user (body: `{ "username": "alice" }`)
+- `GET /api/picks?user_id=<id>` - get picks for a user
+- `POST /api/picks` - upsert a pick (body: `{ user_id, game_id, picked_team, confidence }`)
+
+The server uses a JSON-backed database at `server/data/db.json` (suitable for local development).
