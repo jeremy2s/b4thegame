@@ -6,6 +6,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.type('text').send('Football Confidence Pool API. Try /api/health.');
+});
+
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // Create a simple user (no auth for now)
@@ -113,4 +117,5 @@ app.delete('/api/picks', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
+// bind explicitly to 0.0.0.0 so IPv4 loopback (127.0.0.1) connections succeed
+app.listen(PORT, '0.0.0.0', () => console.log(`Server listening on http://localhost:${PORT}`));

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import mockGames from './data/games'
+import { supabase, supabaseEnabled } from './supabaseClient'
 
 export default function App() {
   const [games, setGames] = useState([])
@@ -19,11 +20,13 @@ export default function App() {
   const [draggedGameId, setDraggedGameId] = useState(null)
   const [dragOverGameId, setDragOverGameId] = useState(null)
   const [activeView, setActiveView] = useState('picks') // 'picks' | 'standings'
+  const [standingsTab, setStandingsTab] = useState('overall') // 'overall' | 'scenarios'
   const [selectedWeek, setSelectedWeek] = useState(1)
   const [allUsers, setAllUsers] = useState([])
   const [standingsSelectedUserId, setStandingsSelectedUserId] = useState(null)
   const [userHistory, setUserHistory] = useState([])
   const [weeklyGrid, setWeeklyGrid] = useState({}) // { user_id: { gameId: pick }}
+  const [scenarioOutcomes, setScenarioOutcomes] = useState({}) // { gameId: team }
   const [tiebreaker, setTiebreaker] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('pool_tiebreaker') || '{}')
@@ -148,6 +151,21 @@ export default function App() {
   useEffect(() => {
     // try to load games from server; if unavailable, use mockGames and push them to server
     async function initGames() {
+      if (supabaseEnabled) {
+        try {
+          const { data, error } = await supabase.from('games').select('*').order('id', { ascending: true })
+          if (!error && Array.isArray(data) && data.length) {
+            setGames(data)
+            return
+          }
+          setGames(mockGames)
+          await supabase.from('games').upsert(mockGames, { onConflict: 'id' })
+          return
+        } catch (e) {
+          setGames(mockGames)
+          return
+        }
+      }
       try {
         const res = await fetch('http://localhost:3000/api/games');
         if (res.ok) {
@@ -180,9 +198,25 @@ export default function App() {
     initGames()
   }, [])
 
-  // load users and standings (server-first)
+  // load users and standings (server-first or supabase)
   useEffect(() => {
     async function loadUsersAndStandings() {
+      if (supabaseEnabled) {
+        try {
+          const { data: usersData } = await supabase.from('users').select('*').order('id', { ascending: true })
+          const { data: picksData } = await supabase.from('picks').select('*')
+          const users = Array.isArray(usersData) ? usersData : []
+          const picks = Array.isArray(picksData) ? picksData : []
+          setAllUsers(users)
+          if (!standingsSelectedUserId && users.length) setStandingsSelectedUserId(users[0].id)
+          if (games.length) {
+            setStandings(computeStandingsFromData(users, picks, games))
+          }
+          return
+        } catch (e) {
+          // fall through to local/server
+        }
+      }
       let users = []
       try {
         const res = await fetch('http://localhost:3000/api/users')
@@ -204,12 +238,22 @@ export default function App() {
       } catch (e) {}
       setStandings(computeStandingsFromLocal())
     }
+    if (supabaseEnabled && !games.length) return
     loadUsersAndStandings()
-  }, [])
+  }, [games])
 
   useEffect(() => {
     if (!standingsSelectedUserId) return
     async function loadHistory() {
+      if (supabaseEnabled && games.length) {
+        try {
+          const { data } = await supabase.from('picks').select('*').eq('user_id', standingsSelectedUserId)
+          setUserHistory(buildUserHistoryFromData(data || [], games))
+          return
+        } catch (e) {
+          // fall through
+        }
+      }
       try {
         const res = await fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`)
         if (res.ok) {
@@ -234,12 +278,21 @@ export default function App() {
       setUserHistory(local)
     }
     loadHistory()
-  }, [standingsSelectedUserId])
+  }, [standingsSelectedUserId, games])
 
   useEffect(() => {
     // when switching to weekly view, fetch picks for all users for the selected week
     async function loadWeekly() {
-      if (activeView !== 'weekly') return
+      if (activeView !== 'weekly' && !(activeView === 'standings' && standingsTab === 'scenarios')) return
+      if (supabaseEnabled && games.length) {
+        try {
+          const { data: picksData } = await supabase.from('picks').select('*')
+          setWeeklyGrid(buildWeeklyGridFromPicks(picksData || [], games, selectedWeek))
+          return
+        } catch (e) {
+          // fall through
+        }
+      }
       const users = allUsers || []
       const map = {}
       await Promise.all(users.map(async u => {
@@ -262,7 +315,7 @@ export default function App() {
       setWeeklyGrid(map)
     }
     loadWeekly()
-  }, [activeView, allUsers, selectedWeek])
+  }, [activeView, standingsTab, allUsers, selectedWeek, games])
 
   useEffect(() => {
     if (!weeks.length) return
@@ -270,10 +323,32 @@ export default function App() {
   }, [weeks, selectedWeek])
 
   useEffect(() => {
+    setScenarioOutcomes(prev => {
+      const next = { ...prev }
+      for (const game of weekGames) {
+        let winner = null
+        if (typeof game.home_score === 'number' && typeof game.away_score === 'number') {
+          winner = game.home_score > game.away_score ? game.home : (game.away_score > game.home_score ? game.away : null)
+        }
+        if (winner) next[game.id] = winner
+        else if (!(game.id in next)) next[game.id] = null
+      }
+      return next
+    })
+  }, [weekGames])
+
+  useEffect(() => {
     // fetch existing picks for logged-in user (if token)
     async function loadPicks() {
       try {
         if (!user) return;
+        if (supabaseEnabled) {
+          const { data } = await supabase.from('picks').select('*').eq('user_id', user.id)
+          const map = {}
+          ;(data || []).forEach(p => { map[p.game_id] = { picked_team: p.picked_team, confidence: p.confidence } })
+          setLocalPicks(map)
+          return
+        }
         // try server first
         try {
           const res = await fetch(`http://localhost:3000/api/picks?user_id=${user.id}`);
@@ -315,6 +390,19 @@ export default function App() {
   // register/login - prefer server, fallback to localStorage
   const register = async () => {
     if (!authName) return alert('enter name')
+    if (supabaseEnabled) {
+      try {
+        const { data, error } = await supabase.from('users').insert({ username: authName }).select().single()
+        if (!error && data) {
+          setUser({ id: data.id, name: data.username })
+          setAuthName('')
+          setAuthPassword('')
+          return
+        }
+      } catch (e) {
+        // fall through
+      }
+    }
     try {
       const res = await fetch('http://localhost:3000/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: authName }) })
       if (res.ok) {
@@ -343,6 +431,19 @@ export default function App() {
 
   const login = async () => {
     if (!authName) return alert('enter name')
+    if (supabaseEnabled) {
+      try {
+        const { data, error } = await supabase.from('users').select('*').eq('username', authName).single()
+        if (!error && data) {
+          setUser({ id: data.id, name: data.username })
+          setAuthName('')
+          setAuthPassword('')
+          return
+        }
+      } catch (e) {
+        // fall through
+      }
+    }
     try {
       const res = await fetch(`http://localhost:3000/api/users?username=${encodeURIComponent(authName)}`)
       if (res.ok) {
@@ -379,6 +480,40 @@ export default function App() {
   }
   const submitPickToServer = async (gameId, pick) => {
     if (!user) return { ok: false, error: 'login required' }
+    if (supabaseEnabled) {
+      try {
+        const { data, error } = await supabase
+          .from('picks')
+          .upsert(
+            {
+              user_id: user.id,
+              game_id: gameId,
+              picked_team: pick.picked_team,
+              confidence: pick.confidence
+            },
+            { onConflict: 'user_id,game_id' }
+          )
+          .select()
+          .single()
+        if (!error && data) {
+          setLocalPicks(prev => ({ ...prev, [gameId]: { picked_team: data.picked_team, confidence: data.confidence } }))
+          const usersForStandings = allUsers.length
+            ? allUsers
+            : (await supabase.from('users').select('*').order('id', { ascending: true })).data || []
+          const picksData = (await supabase.from('picks').select('*')).data || []
+          if (games.length) {
+            setStandings(computeStandingsFromData(usersForStandings, picksData, games))
+          }
+          if (standingsSelectedUserId && String(standingsSelectedUserId) === String(user.id)) {
+            const userPicks = picksData.filter(p => String(p.user_id) === String(user.id))
+            setUserHistory(buildUserHistoryFromData(userPicks, games))
+          }
+          return { ok: true }
+        }
+      } catch (e) {
+        // fall through to server/local
+      }
+    }
     // try server
     try {
       const body = { user_id: user.id, game_id: gameId, picked_team: pick.picked_team, confidence: pick.confidence }
@@ -447,6 +582,80 @@ export default function App() {
     return rows.sort((a,b) => b.score - a.score)
   }
 
+  const computeStandingsFromData = (users, picks, games) => {
+    const rows = (users || []).map(u => ({
+      user_id: u.id,
+      name: u.username || u.name,
+      wins: 0,
+      losses: 0,
+      possible: 0,
+      points: 0
+    }))
+    for (const p of picks || []) {
+      const game = games.find(g => String(g.id) === String(p.game_id))
+      const row = rows.find(r => String(r.user_id) === String(p.user_id))
+      if (!row || !game) continue
+      const conf = p.confidence == null ? 1 : Number(p.confidence)
+      if (typeof game.home_score !== 'number' || typeof game.away_score !== 'number') {
+        row.possible += conf
+        continue
+      }
+      let winner = null
+      if (game.home_score > game.away_score) winner = game.home
+      else if (game.away_score > game.home_score) winner = game.away
+      if (!winner) {
+        row.possible += conf
+        continue
+      }
+      if (p.picked_team === winner) {
+        row.wins += 1
+        row.points += conf
+      } else if (p.picked_team) {
+        row.losses += 1
+      }
+    }
+    return rows
+      .sort((a, b) => b.points - a.points)
+      .map(r => ({
+        user_id: r.user_id,
+        name: r.name,
+        score: r.points,
+        wins: r.wins,
+        losses: r.losses,
+        possible: r.possible,
+        points: r.points
+      }))
+  }
+
+  const buildWeeklyGridFromPicks = (picks, games, weekValue) => {
+    const weekIds = new Set(games.filter(g => g.week === weekValue).map(g => g.id))
+    const map = {}
+    for (const p of picks || []) {
+      if (!weekIds.has(p.game_id)) continue
+      if (!map[p.user_id]) map[p.user_id] = {}
+      map[p.user_id][String(p.game_id)] = p
+    }
+    return map
+  }
+
+  const buildUserHistoryFromData = (picks, games) => {
+    return (picks || []).map(p => {
+      const g = games.find(m => String(m.id) === String(p.game_id)) || null
+      const winner = g && typeof g.home_score === 'number' && typeof g.away_score === 'number'
+        ? (g.home_score > g.away_score ? g.home : (g.away_score > g.home_score ? g.away : null))
+        : null
+      const correct = winner ? (p.picked_team === winner) : null
+      const pointsEarned = correct ? (p.confidence == null ? 1 : Number(p.confidence)) : 0
+      return {
+        ...p,
+        game: g ? { id: g.id, week: g.week, home: g.home, away: g.away, kickoff: g.kickoff, home_score: g.home_score, away_score: g.away_score } : null,
+        winner,
+        correct,
+        pointsEarned
+      }
+    })
+  }
+
   const computeUserStats = (userId) => {
     const picks = JSON.parse(localStorage.getItem(`picks_${userId}`) || '[]')
     let wins = 0
@@ -468,6 +677,43 @@ export default function App() {
     return { wins, losses, possible, points }
   }
 
+  const getActualWinner = (game) => {
+    if (!game) return null
+    if (typeof game.home_score === 'number' && typeof game.away_score === 'number') {
+      if (game.home_score > game.away_score) return game.home
+      if (game.away_score > game.home_score) return game.away
+    }
+    return null
+  }
+
+  const buildScenarioRows = () => {
+    const rows = (allUsers || []).map(u => {
+      const picksMap = weeklyGrid[u.id] || {}
+      let current = 0
+      let remaining = 0
+      for (const game of weekGames) {
+        const pick = picksMap[String(game.id)]
+        if (!pick || !pick.picked_team) continue
+        const conf = pick.confidence == null ? 1 : Number(pick.confidence)
+        const actualWinner = getActualWinner(game)
+        if (actualWinner) {
+          if (pick.picked_team === actualWinner) current += conf
+        } else {
+          const scenarioWinner = scenarioOutcomes[game.id]
+          if (scenarioWinner && pick.picked_team === scenarioWinner) remaining += conf
+        }
+      }
+      return {
+        user_id: u.id,
+        name: u.username || u.name,
+        current,
+        remaining,
+        projected: current + remaining
+      }
+    })
+    return rows.sort((a, b) => b.projected - a.projected)
+  }
+
   const setPickWithConfidence = (gameId, team, confidence) => {
     const parsed = confidence ? parseInt(confidence, 10) : null
     // update local state and persist immediately
@@ -485,6 +731,7 @@ export default function App() {
     })
     const pickToSave = { picked_team: team, confidence: parsed }
     submitPickToServer(gameId, pickToSave).then(() => {
+      if (supabaseEnabled) return
       // refresh standings from server if available
       fetch('http://localhost:3000/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
     })
@@ -613,8 +860,10 @@ export default function App() {
     const res = await submitPickToServer(gameId, pick)
     if (res.ok) alert('pick saved')
     else alert(res.error || 'save failed')
-    // refresh standings
-    setStandings(computeStandingsFromLocal())
+    if (!supabaseEnabled) {
+      // refresh standings
+      setStandings(computeStandingsFromLocal())
+    }
   }
 
   const saveAll = async () => {
@@ -631,16 +880,28 @@ export default function App() {
       if (!res.ok) alert(`Error saving ${id}: ${res.error}`)
     }
     alert('all saved')
-    // recompute standings from local picks + mock games
-    setStandings(computeStandingsFromLocal())
-    // refresh history for selected user
-    if (standingsSelectedUserId) {
-      try {
-        const res = await fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`)
-        if (res.ok) setUserHistory(await res.json())
-        else setUserHistory([])
-      } catch (e) {
-        // fallback handled elsewhere
+    if (supabaseEnabled) {
+      const usersData = (await supabase.from('users').select('*').order('id', { ascending: true })).data || []
+      const picksData = (await supabase.from('picks').select('*')).data || []
+      if (games.length) {
+        setStandings(computeStandingsFromData(usersData, picksData, games))
+      }
+      if (standingsSelectedUserId) {
+        const userPicks = picksData.filter(p => String(p.user_id) === String(standingsSelectedUserId))
+        setUserHistory(buildUserHistoryFromData(userPicks, games))
+      }
+    } else {
+      // recompute standings from local picks + mock games
+      setStandings(computeStandingsFromLocal())
+      // refresh history for selected user
+      if (standingsSelectedUserId) {
+        try {
+          const res = await fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`)
+          if (res.ok) setUserHistory(await res.json())
+          else setUserHistory([])
+        } catch (e) {
+          // fallback handled elsewhere
+        }
       }
     }
   }
@@ -652,7 +913,7 @@ export default function App() {
           <h1>B4TheGame Confidence Pool</h1>
           
           <div className="view-tabs">
-            <button className={`button ${activeView === 'picks' ? 'is-active' : ''}`} onClick={() => setActiveView('picks')}>Picks</button>
+            <button className={`button ${activeView === 'picks' ? 'is-active' : ''}`} onClick={() => setActiveView('picks')}>My Picks</button>
             <button className={`button ${activeView === 'standings' ? 'is-active' : ''}`} onClick={() => setActiveView('standings')}>Standings</button>
             <button className={`button ${activeView === 'weekly' ? 'is-active' : ''}`} onClick={() => setActiveView('weekly')}>Weekly</button>
           </div>
@@ -836,8 +1097,30 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+                {activeView === 'standings' && (
+                  <div className="standings-tabs">
+                    <button
+                      className={`button button--small ${standingsTab === 'overall' ? 'is-active' : ''}`}
+                      onClick={() => setStandingsTab('overall')}
+                    >
+                      Overall
+                    </button>
+                    <button
+                      className={`button button--small ${standingsTab === 'scenarios' ? 'is-active' : ''}`}
+                      onClick={() => setStandingsTab('scenarios')}
+                    >
+                      Scenarios
+                    </button>
+                  </div>
+                )}
                 <div className="standings-actions">
-                  <button className="button" onClick={() => {
+                  <button className="button" onClick={async () => {
+                    if (supabaseEnabled) {
+                      const usersData = (await supabase.from('users').select('*').order('id', { ascending: true })).data || []
+                      const picksData = (await supabase.from('picks').select('*')).data || []
+                      if (games.length) setStandings(computeStandingsFromData(usersData, picksData, games))
+                      return
+                    }
                     // refresh standings from server if available
                     fetch('http://localhost:3000/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
                   }}>Refresh</button>
@@ -898,6 +1181,116 @@ export default function App() {
                         )
                       })}
                       </div>
+                    </div>
+                  </div>
+                ) : standingsTab === 'scenarios' ? (
+                  <div className="scenario-view">
+                    <div className="scenario-card">
+                      <div className="scenario-header">
+                        <div>
+                          <div className="scenario-title">Scenario Outcomes</div>
+                          <div className="muted">Choose winners for the remaining games to project week totals.</div>
+                        </div>
+                        <button
+                          className="button button--small"
+                          onClick={() => {
+                            setScenarioOutcomes(prev => {
+                              const next = { ...prev }
+                              for (const game of weekGames) {
+                                if (getActualWinner(game)) continue
+                                next[game.id] = null
+                              }
+                              return next
+                            })
+                          }}
+                        >
+                          Clear Picks
+                        </button>
+                      </div>
+                      <div className="scenario-list">
+                        {weekGames.map(game => {
+                          const actualWinner = getActualWinner(game)
+                          const selected = scenarioOutcomes[game.id]
+                          const disabled = Boolean(actualWinner)
+                          const awaySelected = selected === game.away
+                          const homeSelected = selected === game.home
+                          return (
+                            <div key={`sc-${game.id}`} className={`scenario-row ${disabled ? 'is-final' : ''}`}>
+                              <div className="scenario-teams">
+                                <button
+                                  type="button"
+                                  className={`scenario-team ${awaySelected ? 'is-picked' : ''}`}
+                                  disabled={disabled}
+                                  onClick={() => {
+                                    setScenarioOutcomes(prev => ({ ...prev, [game.id]: prev[game.id] === game.away ? null : game.away }))
+                                  }}
+                                >
+                                  {renderTeamIcon(game.away, awaySelected)}
+                                  <span>{game.away}</span>
+                                </button>
+                                <span className="scenario-at">@</span>
+                                <button
+                                  type="button"
+                                  className={`scenario-team ${homeSelected ? 'is-picked' : ''}`}
+                                  disabled={disabled}
+                                  onClick={() => {
+                                    setScenarioOutcomes(prev => ({ ...prev, [game.id]: prev[game.id] === game.home ? null : game.home }))
+                                  }}
+                                >
+                                  {renderTeamIcon(game.home, homeSelected)}
+                                  <span>{game.home}</span>
+                                </button>
+                              </div>
+                              <div className="scenario-meta">
+                                <span className="muted">{game.kickoff || 'TBD'}</span>
+                                {actualWinner && <span className="badge badge-correct">Final</span>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div className="scenario-card">
+                      <div className="scenario-title">Projected Week Results</div>
+                      {(() => {
+                        const rows = buildScenarioRows()
+                        const leader = rows[0]
+                        const selected = rows.find(r => String(r.user_id) === String(standingsSelectedUserId))
+                        const canWin = selected && leader ? selected.projected >= leader.projected : false
+                        return (
+                          <>
+                            {selected && leader && (
+                              <div className={`scenario-banner ${canWin ? 'is-win' : 'is-lose'}`}>
+                                {canWin
+                                  ? `${selected.name || 'You'} are projected to finish ${selected.projected === leader.projected ? 'tied for first' : 'first'}.`
+                                  : `${selected.name || 'You'} would need ${leader.projected - selected.projected} more point${leader.projected - selected.projected === 1 ? '' : 's'} to catch the leader.`}
+                              </div>
+                            )}
+                            <table className="standings-table scenario-table">
+                              <thead>
+                                <tr>
+                                  <th style={{width:60}}>Rank</th>
+                                  <th>Entry Name</th>
+                                  <th style={{width:120, textAlign:'right'}}>Current</th>
+                                  <th style={{width:120, textAlign:'right'}}>Remaining</th>
+                                  <th style={{width:120, textAlign:'right'}}>Projected</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rows.map((row, idx) => (
+                                  <tr key={`sc-row-${row.user_id}`} className={String(row.user_id) === String(standingsSelectedUserId) ? 'is-selected' : ''}>
+                                    <td className="col-rank">{idx + 1}</td>
+                                    <td className="col-name">{row.name}</td>
+                                    <td style={{textAlign:'right'}}>{row.current}</td>
+                                    <td style={{textAlign:'right'}}>{row.remaining}</td>
+                                    <td style={{textAlign:'right'}} className="col-points">{row.projected}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </>
+                        )
+                      })()}
                     </div>
                   </div>
                 ) : (
