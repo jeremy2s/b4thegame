@@ -256,7 +256,7 @@ input[type="radio"] { cursor: pointer; }
 .standings-table td.col-rank { font-weight:700; width:60px; }
 .standings-table td.col-name { font-weight:600; }
 .standings-table td.col-points { font-weight:800; font-size:1.05rem; }
-.selected-user-panel { border:1px solid var(--line); padding:12px; border-radius:8px; background:#fff; min-width:300px; }
+
 
 /* Weekly grid styles */
 .weekly-view { overflow: hidden; }
