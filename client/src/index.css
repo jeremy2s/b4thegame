@@ -201,6 +201,16 @@ input[type="radio"] { cursor: pointer; }
 	padding: 12px;
 }
 
+/* place week picker neatly inside account card */
+.account-wrap .week-picker {
+    margin-top: 12px;
+    justify-content: flex-start;
+    gap: 8px;
+}
+.account-wrap .week-picker select {
+    min-width: 160px;
+}
+
 .section-footer {
 	display: flex;
 	justify-content: flex-end;

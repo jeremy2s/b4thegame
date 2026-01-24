@@ -1,0 +1,14 @@
+
+> client@0.0.0 build
+> vite build
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+vite v5.4.21 building for production...
+transforming...
+✓ 27 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.40 kB │ gzip:  0.27 kB
+dist/assets/index-CwB8kUKw.css    8.71 kB │ gzip:  2.44 kB
+dist/assets/index-EtuEt1wH.js   195.28 kB │ gzip: 56.03 kB
+✓ built in 393ms

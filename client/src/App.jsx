@@ -42,7 +42,7 @@ export default function App() {
   const weekGames = games.filter(g => g.week === week)
   const points = Array.from({ length: weekGames.length }, (_, i) => 16 - i)
   const logoMap = {
-    'Arizona Cardinals': 'https://static.www.nfl.com/league/api/clubs/logos/arizona-cardinals.svg',
+    'Arizona Cardinals': 'https://static.www.nfl.com/league/api/clubs/logos/ARI',
     'Atlanta Falcons': 'https://static.www.nfl.com/league/api/clubs/logos/atlanta-falcons.svg',
     'Baltimore Ravens': 'https://static.www.nfl.com/league/api/clubs/logos/baltimore-ravens.svg',
     'Buffalo Bills': 'https://static.www.nfl.com/league/api/clubs/logos/buffalo-bills.svg',
@@ -53,7 +53,7 @@ export default function App() {
     'Dallas Cowboys': 'https://static.www.nfl.com/league/api/clubs/logos/dallas-cowboys.svg',
     'Denver Broncos': 'https://static.www.nfl.com/league/api/clubs/logos/denver-broncos.svg',
     'Detroit Lions': 'https://static.www.nfl.com/league/api/clubs/logos/detroit-lions.svg',
-    'Green Bay Packers': 'https://static.www.nfl.com/league/api/clubs/logos/green-bay-packers.svg',
+    'Green Bay Packers': 'https://static.www.nfl.com/league/api/clubs/logos/GB',
     'Houston Texans': 'https://static.www.nfl.com/league/api/clubs/logos/houston-texans.svg',
     'Indianapolis Colts': 'https://static.www.nfl.com/league/api/clubs/logos/indianapolis-colts.svg',
     'Jacksonville Jaguars': 'https://static.www.nfl.com/league/api/clubs/logos/jacksonville-jaguars.svg',
@@ -650,14 +650,7 @@ export default function App() {
       <div className="app-shell">
         <header className="page-header">
           <h1>B4TheGame Confidence Pool</h1>
-          <div className="week-picker">
-            <label htmlFor="week-select">Select a week:</label>
-            <select id="week-select" value={week} onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10))}>
-              {weeks.map(value => (
-                <option key={`week-${value}`} value={value}>Week {value}</option>
-              ))}
-            </select>
-          </div>
+          
           <div className="view-tabs">
             <button className={`button ${activeView === 'picks' ? 'is-active' : ''}`} onClick={() => setActiveView('picks')}>Picks</button>
             <button className={`button ${activeView === 'standings' ? 'is-active' : ''}`} onClick={() => setActiveView('standings')}>Standings</button>
@@ -692,6 +685,15 @@ export default function App() {
               </div>
             </div>
           )}
+
+          <div className="week-picker">
+            <label htmlFor="week-select">Select a week:</label>
+            <select id="week-select" value={week} onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10))}>
+              {weeks.map(value => (
+                <option key={`week-${value}`} value={value}>Week {value}</option>
+              ))}
+            </select>
+          </div>
         </section>
 
         <section className="table-wrap">
