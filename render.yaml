@@ -2,8 +2,9 @@ services:
   - type: web
     name: b4thegame
     env: node
-    plan: free
-    buildCommand: cd server && npm ci && cd ../client && npm ci && npm run build
+    # Build the API + the client bundle, then serve everything from the Node service.
+    # `--include=dev` ensures build tooling (vite, etc.) is installed during the build step.
+    buildCommand: cd server && npm ci --include=dev && cd ../client && npm ci --include=dev && npm run build
     startCommand: cd server && npm start
     healthCheckPath: /api/health
     envVars:
