@@ -1,14 +1,22 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const db = require('./db');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => {
-  res.type('text').send('Football Confidence Pool API. Try /api/health.');
-});
+const clientDistDir = path.join(__dirname, '..', 'client', 'dist');
+const clientIndexHtml = path.join(clientDistDir, 'index.html');
+const hasClientBuild = fs.existsSync(clientIndexHtml);
+
+if (!hasClientBuild) {
+  app.get('/', (req, res) => {
+    res.type('text').send('Football Confidence Pool API. Try /api/health.');
+  });
+}
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -118,4 +126,14 @@ app.delete('/api/picks', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 // bind explicitly to 0.0.0.0 so IPv4 loopback (127.0.0.1) connections succeed
+
+if (hasClientBuild) {
+  app.use(express.static(clientDistDir));
+  // SPA fallback for non-API routes
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'not found' });
+    res.sendFile(clientIndexHtml);
+  });
+}
+
 app.listen(PORT, '0.0.0.0', () => console.log(`Server listening on http://localhost:${PORT}`));

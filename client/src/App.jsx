@@ -167,13 +167,13 @@ export default function App() {
         }
       }
       try {
-        const res = await fetch('http://localhost:3000/api/games');
+        const res = await fetch('/api/games')
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length) {
             setGames(data);
             try {
-              const sres = await fetch('http://localhost:3000/api/standings');
+              const sres = await fetch('/api/standings')
               if (sres.ok) {
                 const sdata = await sres.json();
                 setStandings(sdata);
@@ -192,7 +192,7 @@ export default function App() {
       setStandings(computeStandingsFromLocal())
       // try to populate server with mock games (best-effort)
       try {
-        await fetch('http://localhost:3000/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mockGames) })
+        await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mockGames) })
       } catch (e) {}
     }
     initGames()
@@ -219,7 +219,7 @@ export default function App() {
       }
       let users = []
       try {
-        const res = await fetch('http://localhost:3000/api/users')
+        const res = await fetch('/api/users')
         if (res.ok) users = await res.json()
       } catch (e) {
         // fallback to local users
@@ -229,7 +229,7 @@ export default function App() {
       if (!standingsSelectedUserId && users.length) setStandingsSelectedUserId(users[0].id)
 
       try {
-        const sres = await fetch('http://localhost:3000/api/standings')
+        const sres = await fetch('/api/standings')
         if (sres.ok) {
           const s = await sres.json()
           setStandings(s)
@@ -255,7 +255,7 @@ export default function App() {
         }
       }
       try {
-        const res = await fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`)
+        const res = await fetch(`/api/user_history?user_id=${standingsSelectedUserId}`)
         if (res.ok) {
           const data = await res.json()
           setUserHistory(data)
@@ -297,7 +297,7 @@ export default function App() {
       const map = {}
       await Promise.all(users.map(async u => {
         try {
-          const res = await fetch(`http://localhost:3000/api/picks?user_id=${u.id}`)
+          const res = await fetch(`/api/picks?user_id=${u.id}`)
           if (res.ok) {
             const picks = await res.json()
             const byGame = {}
@@ -351,7 +351,7 @@ export default function App() {
         }
         // try server first
         try {
-          const res = await fetch(`http://localhost:3000/api/picks?user_id=${user.id}`);
+        const res = await fetch(`/api/picks?user_id=${user.id}`)
           if (res.ok) {
             const data = await res.json();
             const map = {};
@@ -404,7 +404,7 @@ export default function App() {
       }
     }
     try {
-      const res = await fetch('http://localhost:3000/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: authName }) })
+      const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: authName }) })
       if (res.ok) {
         const u = await res.json()
         // keep a local users list for client convenience
@@ -445,7 +445,7 @@ export default function App() {
       }
     }
     try {
-      const res = await fetch(`http://localhost:3000/api/users?username=${encodeURIComponent(authName)}`)
+      const res = await fetch(`/api/users?username=${encodeURIComponent(authName)}`)
       if (res.ok) {
         const u = await res.json()
         setUser({ id: u.id, name: u.username })
@@ -517,16 +517,16 @@ export default function App() {
     // try server
     try {
       const body = { user_id: user.id, game_id: gameId, picked_team: pick.picked_team, confidence: pick.confidence }
-      const res = await fetch('http://localhost:3000/api/picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const res = await fetch('/api/picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (res.ok) {
         const saved = await res.json()
         // reflect server pick in local state
         setLocalPicks(prev => ({ ...prev, [gameId]: { picked_team: saved.picked_team, confidence: saved.confidence } }))
         // refresh standings
-        fetch('http://localhost:3000/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
+        fetch('/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
         // if selected user's history or current user, refresh history
         if (standingsSelectedUserId && String(standingsSelectedUserId) === String(user.id)) {
-          fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`).then(r => r.json()).then(setUserHistory).catch(() => {})
+          fetch(`/api/user_history?user_id=${standingsSelectedUserId}`).then(r => r.json()).then(setUserHistory).catch(() => {})
         }
         return { ok: true }
       }
@@ -733,7 +733,7 @@ export default function App() {
     submitPickToServer(gameId, pickToSave).then(() => {
       if (supabaseEnabled) return
       // refresh standings from server if available
-      fetch('http://localhost:3000/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
+      fetch('/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
     })
   }
 
@@ -896,7 +896,7 @@ export default function App() {
       // refresh history for selected user
       if (standingsSelectedUserId) {
         try {
-          const res = await fetch(`http://localhost:3000/api/user_history?user_id=${standingsSelectedUserId}`)
+          const res = await fetch(`/api/user_history?user_id=${standingsSelectedUserId}`)
           if (res.ok) setUserHistory(await res.json())
           else setUserHistory([])
         } catch (e) {
@@ -1122,7 +1122,7 @@ export default function App() {
                       return
                     }
                     // refresh standings from server if available
-                    fetch('http://localhost:3000/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
+                    fetch('/api/standings').then(r => r.json()).then(setStandings).catch(() => setStandings(computeStandingsFromLocal()))
                   }}>Refresh</button>
                 </div>
               </div>

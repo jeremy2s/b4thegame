@@ -8,3 +8,7 @@ client/.env.local
 .env
 .env.local
 .DS_Store
+client/.vite.*
+server/.server.*
+*.pid
+*.out
