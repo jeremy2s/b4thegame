@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: b4thegame
+    env: node
+    plan: free
+    buildCommand: cd server && npm ci && cd ../client && npm ci && npm run build
+    startCommand: cd server && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.19.6

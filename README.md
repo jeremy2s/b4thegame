@@ -2,6 +2,39 @@
 
 Quick scaffold for a confidence pool app using Node/Express backend and a small React client (Vite).
 
+## Run locally
+
+API (Express):
+
+```bash
+cd server
+npm ci
+npm start
+```
+
+Client (Vite):
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+Client: http://127.0.0.1:5173  
+API: http://127.0.0.1:3000/api/health
+
+## Deploy (frontend + API) to Render + custom domain
+
+This repo includes a Render Blueprint at `render.yaml` that deploys a single Node service which:
+- Serves the built React app (from `client/dist`)
+- Serves the API under `/api/*`
+
+Steps:
+1) Push `main` to GitHub.
+2) In Render: New → Blueprint → select this repo and deploy.
+3) In Render: add custom domain `www.b4thegame.com`.
+4) In GoDaddy DNS: set `www` CNAME to the hostname Render provides.
+
 Run locally:
 
 1. Install dependencies for both server and client
