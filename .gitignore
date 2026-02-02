@@ -1,5 +1,5 @@
 node_modules/
-data/
+server/data/
 client/node_modules/
 client/*.log
 server/*.log
